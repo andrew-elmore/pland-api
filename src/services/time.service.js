@@ -1,10 +1,12 @@
 import Time from '../models/time.model.js';
 
 export const list = async (query = {}) => {
-    const { skip = 0, limit = 50 } = query;
+    const { skip = 0, limit = 50, planId } = query;
+    const filter = {};
+    if (planId) filter.planId = planId;
     const [items, totalCount] = await Promise.all([
-        Time.find().skip(Number(skip)).limit(Number(limit)),
-        Time.countDocuments(),
+        Time.find(filter).sort({ datetime: 1 }).skip(Number(skip)).limit(Number(limit)),
+        Time.countDocuments(filter),
     ]);
     return { items, totalCount };
 };
