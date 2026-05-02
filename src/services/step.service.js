@@ -1,8 +1,12 @@
 import Step from '../models/step.model.js';
 import Time from '../models/time.model.js';
+import Route from '../models/route.model.js';
+import Location from '../models/location.model.js';
 import Itinerary from '../models/itinerary.model.js';
+import * as routeService from './route.service.js';
+import * as timeService from './time.service.js';
 
-const populateTimes = (query) => query.populate('startTimeId').populate('endTimeId');
+const populateRefs = (query) => query.populate('startTimeId').populate('endTimeId').populate('routeId');
 
 const flattenStep = (step) => {
     const obj = step.toJSON();
@@ -10,6 +14,12 @@ const flattenStep = (step) => {
     obj.endTime = obj.endTimeId?.datetime ?? null;
     obj.startTimeId = obj.startTimeId?.id ?? null;
     obj.endTimeId = obj.endTimeId?.id ?? null;
+    if (obj.routeId && typeof obj.routeId === 'object') {
+        obj.route = obj.routeId;
+        obj.routeId = obj.routeId.id ?? null;
+    } else {
+        obj.route = null;
+    }
     return obj;
 };
 
@@ -24,33 +34,149 @@ export const list = async (query = {}) => {
     const filter = {};
     if (itineraryId) filter.itineraryId = itineraryId;
     const [items, totalCount] = await Promise.all([
-        populateTimes(Step.find(filter).skip(Number(skip)).limit(Number(limit))),
+        populateRefs(Step.find(filter).skip(Number(skip)).limit(Number(limit))),
         Step.countDocuments(filter),
     ]);
     return { items: items.map(flattenStep), totalCount };
 };
 
 export const get = async (id) => {
-    const item = await populateTimes(Step.findById(id));
+    const item = await populateRefs(Step.findById(id));
     if (!item) throw Object.assign(new Error('Step not found'), { status: 404 });
     return flattenStep(item);
 };
 
 export const create = async (data) => {
-    const { startTime, endTime, startTimeId, endTimeId, ...rest } = data;
+    const { startTime, endTime, startTimeId, endTimeId, originLocationId, destinationLocationId, travelMode, transitModes, timeId, timeMode, paddingSeconds, ...rest } = data;
     const planId = await getPlanId(rest.itineraryId);
+
+    if (originLocationId && destinationLocationId && travelMode) {
+        const selectedTime = await Time.findById(timeId);
+        if (!selectedTime) throw Object.assign(new Error('Time not found'), { status: 404 });
+
+        const routeResult = await routeService.calculate({ originLocationId, destinationLocationId, travelMode, transitModes, datetime: selectedTime.datetime, timeMode });
+        const route = await new Route({
+            originLocationId,
+            destinationLocationId,
+            travelMode,
+            timeMode,
+            transitModes: transitModes || [],
+            durationSeconds: routeResult.durationSeconds,
+            distanceMeters: routeResult.distanceMeters,
+            overviewPolyline: routeResult.overviewPolyline,
+            steps: routeResult.steps,
+        }).save();
+
+        const destination = await Location.findById(destinationLocationId);
+        const destName = destination?.name || 'destination';
+
+        const pad = paddingSeconds || 0;
+        let resolvedStartTimeId;
+        let resolvedEndTimeId;
+        if (timeMode === 'depart_at') {
+            resolvedStartTimeId = timeId;
+            const arrivalDatetime = routeResult.arrivalTime
+                ? new Date(routeResult.arrivalTime.getTime() + pad * 1000)
+                : new Date(selectedTime.datetime.getTime() + (routeResult.durationSeconds + pad) * 1000);
+            const arrivalTime = await new Time({ planId, datetime: arrivalDatetime, parentTimeId: timeId, routeId: route._id, offsetSeconds: pad, label: `Arrive at ${destName}` }).save();
+            resolvedEndTimeId = arrivalTime._id;
+        } else {
+            resolvedEndTimeId = timeId;
+            const departureDatetime = routeResult.departureTime
+                ? new Date(routeResult.departureTime.getTime() - pad * 1000)
+                : new Date(selectedTime.datetime.getTime() - (routeResult.durationSeconds + pad) * 1000);
+            const departureTime = await new Time({ planId, datetime: departureDatetime, parentTimeId: timeId, routeId: route._id, offsetSeconds: pad, label: `Leave for ${destName}` }).save();
+            resolvedStartTimeId = departureTime._id;
+        }
+
+        const item = new Step({ ...rest, startTimeId: resolvedStartTimeId, endTimeId: resolvedEndTimeId, routeId: route._id });
+        const saved = await item.save();
+        const populated = await populateRefs(Step.findById(saved._id));
+        return flattenStep(populated);
+    }
+
     const resolvedStartTimeId = startTimeId ?? (await new Time({ planId, datetime: startTime }).save())._id;
     const resolvedEndTimeId = endTimeId ?? (await new Time({ planId, datetime: endTime }).save())._id;
     const item = new Step({ ...rest, startTimeId: resolvedStartTimeId, endTimeId: resolvedEndTimeId });
     const saved = await item.save();
-    const populated = await populateTimes(Step.findById(saved._id));
+    const populated = await populateRefs(Step.findById(saved._id));
     return flattenStep(populated);
 };
 
 export const update = async (id, data) => {
-    const { startTime, endTime, startTimeId, endTimeId, ...rest } = data;
+    const { startTime, endTime, startTimeId, endTimeId, originLocationId, destinationLocationId, travelMode, transitModes, timeId, timeMode, paddingSeconds, ...rest } = data;
     const existing = await Step.findById(id);
     if (!existing) throw Object.assign(new Error('Step not found'), { status: 404 });
+
+    if (originLocationId && destinationLocationId && travelMode) {
+        const planId = await getPlanId(existing.itineraryId);
+        const selectedTime = await Time.findById(timeId);
+        if (!selectedTime) throw Object.assign(new Error('Time not found'), { status: 404 });
+
+        const routeResult = await routeService.calculate({ originLocationId, destinationLocationId, travelMode, transitModes, datetime: selectedTime.datetime, timeMode });
+
+        let routeRef;
+        if (existing.routeId) {
+            routeRef = await Route.findByIdAndUpdate(existing.routeId, {
+                originLocationId,
+                destinationLocationId,
+                travelMode,
+                timeMode,
+                transitModes: transitModes || [],
+                durationSeconds: routeResult.durationSeconds,
+                distanceMeters: routeResult.distanceMeters,
+                overviewPolyline: routeResult.overviewPolyline,
+                steps: routeResult.steps,
+            }, { new: true, runValidators: true });
+        } else {
+            routeRef = await new Route({
+                originLocationId,
+                destinationLocationId,
+                travelMode,
+                timeMode,
+                transitModes: transitModes || [],
+                durationSeconds: routeResult.durationSeconds,
+                distanceMeters: routeResult.distanceMeters,
+                overviewPolyline: routeResult.overviewPolyline,
+                steps: routeResult.steps,
+            }).save();
+            rest.routeId = routeRef._id;
+        }
+
+        const destination = await Location.findById(destinationLocationId);
+        const destName = destination?.name || 'destination';
+
+        const pad = paddingSeconds || 0;
+        if (timeMode === 'depart_at') {
+            rest.startTimeId = timeId;
+            const arrivalDatetime = routeResult.arrivalTime
+                ? new Date(routeResult.arrivalTime.getTime() + pad * 1000)
+                : new Date(selectedTime.datetime.getTime() + (routeResult.durationSeconds + pad) * 1000);
+            if (existing.endTimeId) {
+                await Time.findByIdAndUpdate(existing.endTimeId, { datetime: arrivalDatetime, parentTimeId: timeId, routeId: routeRef._id, offsetSeconds: pad, label: `Arrive at ${destName}` }, { runValidators: true });
+            } else {
+                const arrivalTime = await new Time({ planId, datetime: arrivalDatetime, parentTimeId: timeId, routeId: routeRef._id, offsetSeconds: pad, label: `Arrive at ${destName}` }).save();
+                rest.endTimeId = arrivalTime._id;
+            }
+        } else {
+            rest.endTimeId = timeId;
+            const departureDatetime = routeResult.departureTime
+                ? new Date(routeResult.departureTime.getTime() - pad * 1000)
+                : new Date(selectedTime.datetime.getTime() - (routeResult.durationSeconds + pad) * 1000);
+            if (existing.startTimeId) {
+                await Time.findByIdAndUpdate(existing.startTimeId, { datetime: departureDatetime, parentTimeId: timeId, routeId: routeRef._id, offsetSeconds: pad, label: `Leave for ${destName}` }, { runValidators: true });
+            } else {
+                const departureTime = await new Time({ planId, datetime: departureDatetime, parentTimeId: timeId, routeId: routeRef._id, offsetSeconds: pad, label: `Leave for ${destName}` }).save();
+                rest.startTimeId = departureTime._id;
+            }
+        }
+
+        await timeService.recalculateForRoute(routeRef._id);
+
+        const item = await populateRefs(Step.findByIdAndUpdate(id, rest, { new: true, runValidators: true }));
+        if (!item) throw Object.assign(new Error('Step not found'), { status: 404 });
+        return flattenStep(item);
+    }
 
     if (startTimeId) {
         rest.startTimeId = startTimeId;
@@ -64,7 +190,7 @@ export const update = async (id, data) => {
         await Time.findByIdAndUpdate(existing.endTimeId, { datetime: endTime }, { runValidators: true });
     }
 
-    const item = await populateTimes(Step.findByIdAndUpdate(id, rest, { new: true, runValidators: true }));
+    const item = await populateRefs(Step.findByIdAndUpdate(id, rest, { new: true, runValidators: true }));
     if (!item) throw Object.assign(new Error('Step not found'), { status: 404 });
     return flattenStep(item);
 };
@@ -72,5 +198,15 @@ export const update = async (id, data) => {
 export const remove = async (id) => {
     const item = await Step.findByIdAndDelete(id);
     if (!item) throw Object.assign(new Error('Step not found'), { status: 404 });
+
+    if (item.routeId) {
+        await Route.findByIdAndDelete(item.routeId);
+        const computedTime = await Time.findOne({ routeId: item.routeId });
+        if (computedTime) {
+            await Time.findByIdAndDelete(computedTime._id);
+            await Time.updateMany({ parentTimeId: computedTime._id }, { $set: { parentTimeId: null, offsetSeconds: 0, routeId: null } });
+        }
+    }
+
     return item;
 };

@@ -1,5 +1,14 @@
 import * as routeService from '../services/route.service.js';
 
+export const calculate = async (req, res, next) => {
+    try {
+        const result = await routeService.calculate(req.body);
+        res.json(result);
+    } catch (err) {
+        next(err);
+    }
+};
+
 export const list = async (req, res, next) => {
     try {
         const result = await routeService.list(req.query);
@@ -40,6 +49,15 @@ export const remove = async (req, res, next) => {
     try {
         await routeService.remove(req.params.id);
         res.status(204).end();
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const recalculateAll = async (req, res, next) => {
+    try {
+        const result = await routeService.recalculateAll(req.body.planId);
+        res.json(result);
     } catch (err) {
         next(err);
     }
