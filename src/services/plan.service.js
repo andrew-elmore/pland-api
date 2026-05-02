@@ -1,10 +1,15 @@
 import Plan from '../models/plan.model.js';
+import Participant from '../models/participant.model.js';
+import User from '../models/user.model.js';
+import Profile from '../models/profile.model.js';
 
 export const list = async (query = {}) => {
-    const { skip = 0, limit = 50 } = query;
+    const { skip = 0, limit = 50, ownerId } = query;
+    const filter = {};
+    if (ownerId) filter.ownerId = ownerId;
     const [items, totalCount] = await Promise.all([
-        Plan.find().skip(Number(skip)).limit(Number(limit)),
-        Plan.countDocuments(),
+        Plan.find(filter).skip(Number(skip)).limit(Number(limit)),
+        Plan.countDocuments(filter),
     ]);
     return { items, totalCount };
 };
@@ -16,8 +21,21 @@ export const get = async (id) => {
 };
 
 export const create = async (data) => {
-    const item = new Plan(data);
-    return item.save();
+    const item = await new Plan(data).save();
+
+    const user = await User.findById(data.ownerId);
+    const profile = await Profile.findOne({ userId: data.ownerId });
+
+    await new Participant({
+        planId: item._id,
+        firstName: profile?.firstName ?? '',
+        lastName: profile?.lastName ?? '',
+        email: user.email,
+        role: 'admin',
+        userId: data.ownerId,
+    }).save();
+
+    return item;
 };
 
 export const update = async (id, data) => {

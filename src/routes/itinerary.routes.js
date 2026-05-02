@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import * as controller from '../controllers/itinerary.controller.js';
+import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
 
-router.get('/', controller.list);
-router.get('/:id', controller.get);
-router.post('/', controller.create);
-router.put('/:id', controller.update);
-router.delete('/:id', controller.remove);
+router.get('/', authenticate, controller.list);
+router.get('/:id', authenticate, controller.get);
+router.post('/', authenticate, controller.create);
+router.put('/:id', authenticate, controller.update);
+router.delete('/:id', authenticate, controller.remove);
 
 export default router;

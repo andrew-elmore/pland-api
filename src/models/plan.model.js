@@ -5,6 +5,7 @@ const { Schema } = mongoose;
 
 const planSchema = new Schema({
     name: { type: String, required: true },
+    description: { type: String, default: '' },
     ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     userIds: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     locationIds: [{ type: Schema.Types.ObjectId, ref: 'Location' }],

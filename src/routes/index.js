@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import authRoutes from './auth.routes.js';
 import userRoutes from './user.routes.js';
 import profileRoutes from './profile.routes.js';
 import roleRoutes from './role.routes.js';
+import participantRoutes from './participant.routes.js';
 import planRoutes from './plan.routes.js';
 import itineraryRoutes from './itinerary.routes.js';
 import stepRoutes from './step.routes.js';
@@ -13,9 +15,11 @@ import timeslotRoutes from './timeslot.routes.js';
 
 const router = Router();
 
+router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/profiles', profileRoutes);
 router.use('/roles', roleRoutes);
+router.use('/participants', participantRoutes);
 router.use('/plans', planRoutes);
 router.use('/itineraries', itineraryRoutes);
 router.use('/steps', stepRoutes);

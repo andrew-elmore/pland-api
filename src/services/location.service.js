@@ -1,10 +1,12 @@
 import Location from '../models/location.model.js';
 
 export const list = async (query = {}) => {
-    const { skip = 0, limit = 50 } = query;
+    const { skip = 0, limit = 50, planId } = query;
+    const filter = {};
+    if (planId) filter.planId = planId;
     const [items, totalCount] = await Promise.all([
-        Location.find().skip(Number(skip)).limit(Number(limit)),
-        Location.countDocuments(),
+        Location.find(filter).skip(Number(skip)).limit(Number(limit)),
+        Location.countDocuments(filter),
     ]);
     return { items, totalCount };
 };
