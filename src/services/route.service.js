@@ -116,6 +116,50 @@ export const calculate = async (data) => {
     return extractRouteResult(json.routes[0]);
 };
 
+export const preview = async (data) => {
+    const { originLocationId, destinationLocationId, travelMode, transitModes, datetime, timeMode } = data;
+    const [origin, destination] = await Promise.all([
+        Location.findById(originLocationId),
+        Location.findById(destinationLocationId),
+    ]);
+    if (!origin) throw Object.assign(new Error('Origin location not found'), { status: 404 });
+    if (!destination) throw Object.assign(new Error('Destination location not found'), { status: 404 });
+
+    const modeMap = { drive: 'driving', walk: 'walking', transit: 'transit' };
+    const googleMode = modeMap[travelMode];
+    if (!googleMode) throw Object.assign(new Error('Invalid travel mode'), { status: 400 });
+
+    let url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&mode=${googleMode}&key=${env.googleMapsApiKey}&alternatives=true`;
+
+    if (datetime) {
+        const epochSeconds = Math.floor(new Date(datetime).getTime() / 1000);
+        if (travelMode === 'transit' && timeMode === 'arrive_by') {
+            url += `&arrival_time=${epochSeconds}`;
+        } else {
+            url += `&departure_time=${epochSeconds}`;
+        }
+    }
+
+    if (travelMode === 'transit' && transitModes?.length) {
+        const apiModes = transitModes.filter(m => m !== 'ferry');
+        if (apiModes.length) {
+            url += `&transit_mode=${apiModes.join('|')}`;
+        }
+    }
+
+    const response = await fetch(url);
+    const json = await response.json();
+
+    if (json.status !== 'OK' || !json.routes?.length) {
+        throw Object.assign(new Error(`Google Maps error: ${json.status}`), { status: 502 });
+    }
+
+    return json.routes.map((route) => ({
+        ...extractRouteResult(route),
+        summary: route.summary || '',
+    }));
+};
+
 export const list = async (query = {}) => {
     const { skip = 0, limit = 50, planId } = query;
     let filter = {};

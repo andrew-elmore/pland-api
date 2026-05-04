@@ -47,14 +47,16 @@ export const get = async (id) => {
 };
 
 export const create = async (data) => {
-    const { startTime, endTime, startTimeId, endTimeId, originLocationId, destinationLocationId, travelMode, transitModes, timeId, timeMode, paddingSeconds, ...rest } = data;
+    const { startTime, endTime, startTimeId, endTimeId, originLocationId, destinationLocationId, travelMode, transitModes, timeId, timeMode, paddingSeconds, routeData, ...rest } = data;
     const planId = await getPlanId(rest.itineraryId);
 
     if (originLocationId && destinationLocationId && travelMode) {
         const selectedTime = await Time.findById(timeId);
         if (!selectedTime) throw Object.assign(new Error('Time not found'), { status: 404 });
 
-        const routeResult = await routeService.calculate({ originLocationId, destinationLocationId, travelMode, transitModes, datetime: selectedTime.datetime, timeMode });
+        const routeResult = routeData
+            ? { ...routeData, departureTime: routeData.departureTime ? new Date(routeData.departureTime) : null, arrivalTime: routeData.arrivalTime ? new Date(routeData.arrivalTime) : null }
+            : await routeService.calculate({ originLocationId, destinationLocationId, travelMode, transitModes, datetime: selectedTime.datetime, timeMode });
         const route = await new Route({
             originLocationId,
             destinationLocationId,
@@ -103,8 +105,44 @@ export const create = async (data) => {
     return flattenStep(populated);
 };
 
+export const createWithDuration = async (data) => {
+    const { durationSeconds, endTimeLabel, startTimeLabel, ...rest } = data;
+    const planId = await getPlanId(rest.itineraryId);
+
+    if (rest.startTimeId && !rest.endTimeId) {
+        const parentTime = await Time.findById(rest.startTimeId);
+        if (!parentTime) throw Object.assign(new Error('Start time not found'), { status: 404 });
+        const endDatetime = new Date(parentTime.datetime.getTime() + durationSeconds * 1000);
+        const endTime = await new Time({
+            planId,
+            datetime: endDatetime,
+            parentTimeId: rest.startTimeId,
+            offsetSeconds: durationSeconds,
+            label: endTimeLabel || `${rest.name} End`,
+        }).save();
+        rest.endTimeId = endTime._id;
+    } else if (rest.endTimeId && !rest.startTimeId) {
+        const parentTime = await Time.findById(rest.endTimeId);
+        if (!parentTime) throw Object.assign(new Error('End time not found'), { status: 404 });
+        const startDatetime = new Date(parentTime.datetime.getTime() - durationSeconds * 1000);
+        const startTime = await new Time({
+            planId,
+            datetime: startDatetime,
+            parentTimeId: rest.endTimeId,
+            offsetSeconds: -durationSeconds,
+            label: startTimeLabel || `${rest.name} Start`,
+        }).save();
+        rest.startTimeId = startTime._id;
+    }
+
+    const item = new Step({ ...rest });
+    const saved = await item.save();
+    const populated = await populateRefs(Step.findById(saved._id));
+    return flattenStep(populated);
+};
+
 export const update = async (id, data) => {
-    const { startTime, endTime, startTimeId, endTimeId, originLocationId, destinationLocationId, travelMode, transitModes, timeId, timeMode, paddingSeconds, ...rest } = data;
+    const { startTime, endTime, startTimeId, endTimeId, originLocationId, destinationLocationId, travelMode, transitModes, timeId, timeMode, paddingSeconds, routeData, ...rest } = data;
     const existing = await Step.findById(id);
     if (!existing) throw Object.assign(new Error('Step not found'), { status: 404 });
 
@@ -113,7 +151,9 @@ export const update = async (id, data) => {
         const selectedTime = await Time.findById(timeId);
         if (!selectedTime) throw Object.assign(new Error('Time not found'), { status: 404 });
 
-        const routeResult = await routeService.calculate({ originLocationId, destinationLocationId, travelMode, transitModes, datetime: selectedTime.datetime, timeMode });
+        const routeResult = routeData
+            ? { ...routeData, departureTime: routeData.departureTime ? new Date(routeData.departureTime) : null, arrivalTime: routeData.arrivalTime ? new Date(routeData.arrivalTime) : null }
+            : await routeService.calculate({ originLocationId, destinationLocationId, travelMode, transitModes, datetime: selectedTime.datetime, timeMode });
 
         let routeRef;
         if (existing.routeId) {

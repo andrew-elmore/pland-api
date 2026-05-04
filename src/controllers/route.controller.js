@@ -9,6 +9,15 @@ export const calculate = async (req, res, next) => {
     }
 };
 
+export const preview = async (req, res, next) => {
+    try {
+        const result = await routeService.preview(req.body);
+        res.json(result);
+    } catch (err) {
+        next(err);
+    }
+};
+
 export const list = async (req, res, next) => {
     try {
         const result = await routeService.list(req.query);
