@@ -36,6 +36,15 @@ export const createWithDuration = async (req, res, next) => {
     }
 };
 
+export const createWithTravel = async (req, res, next) => {
+    try {
+        const result = await stepService.createWithTravel(req.body);
+        res.status(201).json(result);
+    } catch (err) {
+        next(err);
+    }
+};
+
 export const update = async (req, res, next) => {
     try {
         const result = await stepService.update(req.params.id, req.body);
