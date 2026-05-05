@@ -66,6 +66,7 @@ export const create = async (data) => {
             durationSeconds: routeResult.durationSeconds,
             distanceMeters: routeResult.distanceMeters,
             overviewPolyline: routeResult.overviewPolyline,
+            fare: routeResult.fare || null,
             steps: routeResult.steps,
         }).save();
 
@@ -161,6 +162,7 @@ export const createWithTravel = async (data) => {
         durationSeconds: routeResult.durationSeconds,
         distanceMeters: routeResult.distanceMeters,
         overviewPolyline: routeResult.overviewPolyline,
+        fare: routeResult.fare || null,
         steps: routeResult.steps,
     }).save();
 
@@ -265,31 +267,24 @@ export const update = async (id, data) => {
             ? { ...routeData, departureTime: routeData.departureTime ? new Date(routeData.departureTime) : null, arrivalTime: routeData.arrivalTime ? new Date(routeData.arrivalTime) : null }
             : await routeService.calculate({ originLocationId, destinationLocationId, travelMode, transitModes, datetime: selectedTime.datetime, timeMode });
 
+        const routeFields = {
+            originLocationId,
+            destinationLocationId,
+            travelMode,
+            timeMode,
+            transitModes: transitModes || [],
+            durationSeconds: routeResult.durationSeconds,
+            distanceMeters: routeResult.distanceMeters,
+            overviewPolyline: routeResult.overviewPolyline,
+            fare: routeResult.fare || null,
+            steps: routeResult.steps,
+        };
+
         let routeRef;
         if (existing.routeId) {
-            routeRef = await Route.findByIdAndUpdate(existing.routeId, {
-                originLocationId,
-                destinationLocationId,
-                travelMode,
-                timeMode,
-                transitModes: transitModes || [],
-                durationSeconds: routeResult.durationSeconds,
-                distanceMeters: routeResult.distanceMeters,
-                overviewPolyline: routeResult.overviewPolyline,
-                steps: routeResult.steps,
-            }, { new: true, runValidators: true });
+            routeRef = await Route.findByIdAndUpdate(existing.routeId, routeFields, { new: true, runValidators: true });
         } else {
-            routeRef = await new Route({
-                originLocationId,
-                destinationLocationId,
-                travelMode,
-                timeMode,
-                transitModes: transitModes || [],
-                durationSeconds: routeResult.durationSeconds,
-                distanceMeters: routeResult.distanceMeters,
-                overviewPolyline: routeResult.overviewPolyline,
-                steps: routeResult.steps,
-            }).save();
+            routeRef = await new Route(routeFields).save();
             rest.routeId = routeRef._id;
         }
 

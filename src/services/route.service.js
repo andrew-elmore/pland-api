@@ -43,6 +43,29 @@ const flattenRoute = (route) => {
 const hasFerrySegment = (route) =>
     route.legs[0].steps.some(s => s.transit_details?.line?.vehicle?.type === 'FERRY');
 
+const extractTransitDetails = (s) => {
+    if (!s.transit_details) return null;
+    const td = s.transit_details;
+    const line = td.line || {};
+    return {
+        lineName: line.name || null,
+        lineShortName: line.short_name || null,
+        lineColor: line.color || null,
+        lineTextColor: line.text_color || null,
+        vehicleType: line.vehicle?.type || null,
+        vehicleName: line.vehicle?.name || null,
+        vehicleIcon: line.vehicle?.icon || null,
+        departureStop: td.departure_stop?.name || null,
+        arrivalStop: td.arrival_stop?.name || null,
+        departureTime: td.departure_time?.value ? new Date(td.departure_time.value * 1000) : null,
+        arrivalTime: td.arrival_time?.value ? new Date(td.arrival_time.value * 1000) : null,
+        numStops: td.num_stops ?? null,
+        headway: td.headway ?? null,
+        agencyName: line.agencies?.[0]?.name || null,
+        agencyUrl: line.agencies?.[0]?.url || null,
+    };
+};
+
 const extractRouteResult = (googleRoute) => {
     const leg = googleRoute.legs[0];
     return {
@@ -51,6 +74,11 @@ const extractRouteResult = (googleRoute) => {
         departureTime: leg.departure_time?.value ? new Date(leg.departure_time.value * 1000) : null,
         arrivalTime: leg.arrival_time?.value ? new Date(leg.arrival_time.value * 1000) : null,
         overviewPolyline: googleRoute.overview_polyline?.points || '',
+        fare: googleRoute.fare ? {
+            currency: googleRoute.fare.currency,
+            value: googleRoute.fare.value,
+            text: googleRoute.fare.text,
+        } : null,
         steps: (leg.steps || []).map(s => ({
             htmlInstructions: s.html_instructions,
             maneuver: s.maneuver || null,
@@ -62,6 +90,7 @@ const extractRouteResult = (googleRoute) => {
             endLng: s.end_location.lng,
             polyline: s.polyline?.points || '',
             travelMode: s.travel_mode,
+            transitDetails: extractTransitDetails(s),
         })),
     };
 };
@@ -239,6 +268,7 @@ export const recalculateAll = async (planId) => {
         route.durationSeconds = routeResult.durationSeconds;
         route.distanceMeters = routeResult.distanceMeters;
         route.overviewPolyline = routeResult.overviewPolyline;
+        route.fare = routeResult.fare;
         route.steps = routeResult.steps;
         await route.save();
 
