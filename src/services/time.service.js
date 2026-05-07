@@ -1,5 +1,6 @@
 import Time from '../models/time.model.js';
 import Route from '../models/route.model.js';
+import * as routeService from './route.service.js';
 
 const computeDependentDatetime = async (dep, parentDatetime) => {
     if (dep.routeId) {
@@ -13,8 +14,49 @@ const computeDependentDatetime = async (dep, parentDatetime) => {
 
 export const cascadeTimeUpdate = async (timeId, newDatetime) => {
     const dependents = await Time.find({ parentTimeId: timeId });
+    console.log(':~: cascade', JSON.stringify({ timeId, newDatetime, dependentCount: dependents.length, dependentIds: dependents.map(d => ({ id: d._id, label: d.label, routeId: d.routeId })) }));
     for (const dep of dependents) {
-        const computed = await computeDependentDatetime(dep, newDatetime);
+        let computed;
+        if (dep.routeId) {
+            const route = await Route.findById(dep.routeId);
+            console.log(':~: cascade route-dependent', JSON.stringify({ depId: dep._id, routeId: dep.routeId, routeFound: !!route }));
+            if (route) {
+                try {
+                    const routeResult = await routeService.calculate({
+                        originLocationId: route.originLocationId,
+                        destinationLocationId: route.destinationLocationId,
+                        travelMode: route.travelMode,
+                        transitModes: route.transitModes,
+                        datetime: newDatetime,
+                        timeMode: route.timeMode,
+                    });
+                    route.durationSeconds = routeResult.durationSeconds;
+                    route.distanceMeters = routeResult.distanceMeters;
+                    route.overviewPolyline = routeResult.overviewPolyline;
+                    route.fare = routeResult.fare;
+                    route.steps = routeResult.steps;
+                    if (routeResult.departureTime) route.departureTime = routeResult.departureTime;
+                    if (routeResult.arrivalTime) route.arrivalTime = routeResult.arrivalTime;
+                    await route.save();
+                    const pad = dep.offsetSeconds || 0;
+                    if (route.timeMode === 'depart_at' && routeResult.arrivalTime) {
+                        computed = new Date(routeResult.arrivalTime.getTime() + pad * 1000);
+                    } else if (route.timeMode === 'arrive_by' && routeResult.departureTime) {
+                        computed = new Date(routeResult.departureTime.getTime() - pad * 1000);
+                    } else {
+                        const sign = route.timeMode === 'depart_at' ? 1 : -1;
+                        computed = new Date(newDatetime.getTime() + sign * (routeResult.durationSeconds + pad) * 1000);
+                    }
+                } catch (err) {
+                    console.error('Route recalculation failed during cascade, using existing duration:', err.message);
+                    computed = await computeDependentDatetime(dep, newDatetime);
+                }
+            } else {
+                computed = await computeDependentDatetime(dep, newDatetime);
+            }
+        } else {
+            computed = await computeDependentDatetime(dep, newDatetime);
+        }
         dep.datetime = computed;
         await dep.save();
         await cascadeTimeUpdate(dep._id, computed);
@@ -69,6 +111,7 @@ export const create = async (data) => {
 };
 
 export const update = async (id, data) => {
+    console.log(':~: time.update called', JSON.stringify({ id, data: { ...data, datetime: data.datetime || undefined } }));
     if (data.parentTimeId) {
         const parent = await Time.findById(data.parentTimeId);
         if (!parent) throw Object.assign(new Error('Parent time not found'), { status: 404 });
@@ -81,17 +124,22 @@ export const update = async (id, data) => {
         } else if (!data.datetime) {
             data.datetime = new Date(parent.datetime.getTime() + (data.offsetSeconds || 0) * 1000);
         }
+        console.log(':~: time.update computed datetime', JSON.stringify({ datetime: data.datetime }));
     }
     const item = await Time.findByIdAndUpdate(id, data, { new: true, runValidators: true });
     if (!item) throw Object.assign(new Error('Time not found'), { status: 404 });
+    console.log(':~: time.update saved', JSON.stringify({ id: item._id, label: item.label, datetime: item.datetime, routeId: item.routeId, parentTimeId: item.parentTimeId }));
     if (item.routeId && item.parentTimeId && !data.parentTimeId) {
+        console.log(':~: time.update recomputing route-dependent time');
         const parent = await Time.findById(item.parentTimeId);
         if (parent) {
             const computed = await computeDependentDatetime(item, parent.datetime);
             item.datetime = computed;
             await item.save();
+            console.log(':~: time.update recomputed', JSON.stringify({ newDatetime: computed }));
         }
     }
+    console.log(':~: time.update calling cascadeTimeUpdate');
     await cascadeTimeUpdate(item._id, item.datetime);
     return item;
 };

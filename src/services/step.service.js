@@ -68,6 +68,8 @@ export const create = async (data) => {
             overviewPolyline: routeResult.overviewPolyline,
             fare: routeResult.fare || null,
             steps: routeResult.steps,
+            departureTime: routeResult.departureTime || null,
+            arrivalTime: routeResult.arrivalTime || null,
         }).save();
 
         const destination = await Location.findById(destinationLocationId);
@@ -164,6 +166,8 @@ export const createWithTravel = async (data) => {
         overviewPolyline: routeResult.overviewPolyline,
         fare: routeResult.fare || null,
         steps: routeResult.steps,
+        departureTime: routeResult.departureTime || null,
+        arrivalTime: routeResult.arrivalTime || null,
     }).save();
 
     const destination = await Location.findById(routeStep.destinationLocationId);
@@ -263,9 +267,13 @@ export const update = async (id, data) => {
         const selectedTime = await Time.findById(timeId);
         if (!selectedTime) throw Object.assign(new Error('Time not found'), { status: 404 });
 
+        console.log(':~: step update route branch', JSON.stringify({ hasRouteData: !!routeData, timeId, timeMode, paddingSeconds, existingRouteId: existing.routeId?.toString() }));
+
         const routeResult = routeData
             ? { ...routeData, departureTime: routeData.departureTime ? new Date(routeData.departureTime) : null, arrivalTime: routeData.arrivalTime ? new Date(routeData.arrivalTime) : null }
             : await routeService.calculate({ originLocationId, destinationLocationId, travelMode, transitModes, datetime: selectedTime.datetime, timeMode });
+
+        console.log(':~: routeResult', JSON.stringify({ durationSeconds: routeResult.durationSeconds, distanceMeters: routeResult.distanceMeters, stepsCount: routeResult.steps?.length, departureTime: routeResult.departureTime, arrivalTime: routeResult.arrivalTime }));
 
         const routeFields = {
             originLocationId,
@@ -278,11 +286,14 @@ export const update = async (id, data) => {
             overviewPolyline: routeResult.overviewPolyline,
             fare: routeResult.fare || null,
             steps: routeResult.steps,
+            departureTime: routeResult.departureTime || null,
+            arrivalTime: routeResult.arrivalTime || null,
         };
 
         let routeRef;
         if (existing.routeId) {
             routeRef = await Route.findByIdAndUpdate(existing.routeId, routeFields, { new: true, runValidators: true });
+            console.log(':~: route updated', JSON.stringify({ routeId: routeRef?._id?.toString(), newDuration: routeRef?.durationSeconds, newStepsCount: routeRef?.steps?.length }));
         } else {
             routeRef = await new Route(routeFields).save();
             rest.routeId = routeRef._id;
@@ -326,13 +337,15 @@ export const update = async (id, data) => {
     if (startTimeId) {
         rest.startTimeId = startTimeId;
     } else if (startTime) {
-        await Time.findByIdAndUpdate(existing.startTimeId, { datetime: startTime }, { runValidators: true });
+        const updatedStart = await Time.findByIdAndUpdate(existing.startTimeId, { datetime: startTime }, { new: true, runValidators: true });
+        if (updatedStart) await timeService.cascadeTimeUpdate(updatedStart._id, updatedStart.datetime);
     }
 
     if (endTimeId) {
         rest.endTimeId = endTimeId;
     } else if (endTime) {
-        await Time.findByIdAndUpdate(existing.endTimeId, { datetime: endTime }, { runValidators: true });
+        const updatedEnd = await Time.findByIdAndUpdate(existing.endTimeId, { datetime: endTime }, { new: true, runValidators: true });
+        if (updatedEnd) await timeService.cascadeTimeUpdate(updatedEnd._id, updatedEnd.datetime);
     }
 
     const item = await populateRefs(Step.findByIdAndUpdate(id, rest, { new: true, runValidators: true }));
