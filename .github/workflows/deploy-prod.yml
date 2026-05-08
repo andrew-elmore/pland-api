@@ -30,4 +30,4 @@ jobs:
             --region us-central1 \
             --port 8080 \
             --allow-unauthenticated \
-            --set-env-vars "MONGODB_URI=${{ secrets.PROD_MONGODB_URI }},JWT_SECRET=${{ secrets.PROD_JWT_SECRET }},GOOGLE_MAPS_API_KEY=${{ secrets.PROD_GOOGLE_MAPS_API_KEY }}"
+            --update-env-vars "^::^MONGODB_URI=${{ secrets.PROD_MONGODB_URI }}::JWT_SECRET=${{ secrets.PROD_JWT_SECRET }}::GOOGLE_MAPS_API_KEY=${{ secrets.PROD_GOOGLE_MAPS_API_KEY }}"
