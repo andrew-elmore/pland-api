@@ -1,4 +1,5 @@
 import Time from '../models/time.model.js';
+import Step from '../models/step.model.js';
 import Route from '../models/route.model.js';
 import * as routeService from './route.service.js';
 
@@ -149,4 +150,64 @@ export const remove = async (id) => {
     if (!item) throw Object.assign(new Error('Time not found'), { status: 404 });
     await Time.updateMany({ parentTimeId: id }, { $set: { parentTimeId: null, offsetSeconds: 0, routeId: null } });
     return item;
+};
+
+const getTimeType = (time) => {
+    if (!time.parentTimeId) return 'absolute';
+    if (time.routeId) return 'route';
+    return 'dependent';
+};
+
+export const merge = async (recipientId, sourceId) => {
+    const [recipient, source] = await Promise.all([
+        Time.findById(recipientId),
+        Time.findById(sourceId),
+    ]);
+    if (!recipient) throw Object.assign(new Error('Recipient time not found'), { status: 404 });
+    if (!source) throw Object.assign(new Error('Source time not found'), { status: 404 });
+
+    const recipientType = getTimeType(recipient);
+    const sourceType = getTimeType(source);
+
+    if (recipientType === 'route' && sourceType === 'route') {
+        throw Object.assign(new Error('Cannot merge two route-dependent times'), { status: 400 });
+    }
+
+    let survivor, absorbed;
+    if (recipientType === 'absolute' && sourceType !== 'absolute') {
+        survivor = recipient;
+        absorbed = source;
+    } else if (sourceType === 'absolute' && recipientType !== 'absolute') {
+        survivor = source;
+        absorbed = recipient;
+    } else if (recipientType === 'route' && sourceType === 'dependent') {
+        survivor = recipient;
+        absorbed = source;
+    } else if (sourceType === 'route' && recipientType === 'dependent') {
+        survivor = source;
+        absorbed = recipient;
+    } else {
+        survivor = recipient;
+        absorbed = source;
+    }
+
+    await Time.updateMany(
+        { parentTimeId: absorbed._id },
+        { $set: { parentTimeId: survivor._id } },
+    );
+
+    await Step.updateMany(
+        { startTimeId: absorbed._id },
+        { $set: { startTimeId: survivor._id } },
+    );
+    await Step.updateMany(
+        { endTimeId: absorbed._id },
+        { $set: { endTimeId: survivor._id } },
+    );
+
+    await Time.findByIdAndDelete(absorbed._id);
+
+    await cascadeTimeUpdate(survivor._id, survivor.datetime);
+
+    return survivor;
 };

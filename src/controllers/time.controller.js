@@ -44,3 +44,12 @@ export const remove = async (req, res, next) => {
         next(err);
     }
 };
+
+export const merge = async (req, res, next) => {
+    try {
+        const result = await timeService.merge(req.params.id, req.body.sourceTimeId);
+        res.json(result);
+    } catch (err) {
+        next(err);
+    }
+};

@@ -9,4 +9,6 @@ router.post('/', controller.create);
 router.put('/:id', controller.update);
 router.delete('/:id', controller.remove);
 
+router.post('/:id/merge', controller.merge);
+
 export default router;
