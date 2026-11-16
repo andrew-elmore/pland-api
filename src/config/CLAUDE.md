@@ -11,11 +11,19 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-export default {
+const env = {
     port: process.env.PORT || 3001,
     mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/pland',
 };
+
+export default env;
 ```
+
+Startup validation (invalid `AUTH_MODE`, `AUTH_MODE=dev` in production, missing Clerk keys in clerk mode) throws from `env.js` so the server fails fast.
+
+## `clerk.js`
+
+Exports the shared Clerk backend client built with `createClerkClient` from the keys in `env.js`. Middleware and services import it instead of `@clerk/express`'s env-reading default client.
 
 When adding a new environment variable, add it here with a sensible default and add the key to `.env.example`.
 

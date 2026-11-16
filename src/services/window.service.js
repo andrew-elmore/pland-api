@@ -1,10 +1,14 @@
 import Window from '../models/window.model.js';
+import Timeslot from '../models/timeslot.model.js';
+import Itinerary from '../models/itinerary.model.js';
+import { accessiblePlanIds } from './access.service.js';
 
 export const list = async (query = {}) => {
-    const { skip = 0, limit = 50 } = query;
+    const { skip = 0, limit = 50, userId } = query;
+    const filter = { itineraryId: { $in: await Itinerary.distinct('_id', { planId: { $in: await accessiblePlanIds(userId) } }) } };
     const [items, totalCount] = await Promise.all([
-        Window.find().skip(Number(skip)).limit(Number(limit)),
-        Window.countDocuments(),
+        Window.find(filter).skip(Number(skip)).limit(Number(limit)),
+        Window.countDocuments(filter),
     ]);
     return { items, totalCount };
 };
@@ -29,5 +33,6 @@ export const update = async (id, data) => {
 export const remove = async (id) => {
     const item = await Window.findByIdAndDelete(id);
     if (!item) throw Object.assign(new Error('Window not found'), { status: 404 });
+    await Timeslot.deleteMany({ windowId: id });
     return item;
 };

@@ -5,6 +5,7 @@ import Location from '../models/location.model.js';
 import Itinerary from '../models/itinerary.model.js';
 import * as routeService from './route.service.js';
 import * as timeService from './time.service.js';
+import { accessiblePlanIds, queryId } from './access.service.js';
 
 const populateRefs = (query) => query.populate('startTimeId').populate('endTimeId').populate('routeId');
 
@@ -30,9 +31,9 @@ const getPlanId = async (itineraryId) => {
 };
 
 export const list = async (query = {}) => {
-    const { skip = 0, limit = 50, itineraryId } = query;
-    const filter = {};
-    if (itineraryId) filter.itineraryId = itineraryId;
+    const { skip = 0, limit = 50, itineraryId, userId } = query;
+    const filter = { itineraryId: { $in: await Itinerary.distinct('_id', { planId: { $in: await accessiblePlanIds(userId) } }) } };
+    if (itineraryId) filter.itineraryId.$eq = queryId(itineraryId, 'itineraryId');
     const [items, totalCount] = await Promise.all([
         populateRefs(Step.find(filter).skip(Number(skip)).limit(Number(limit))),
         Step.countDocuments(filter),

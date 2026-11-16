@@ -1,9 +1,11 @@
 import Location from '../models/location.model.js';
+import Route from '../models/route.model.js';
+import { accessiblePlanIds, queryId } from './access.service.js';
 
 export const list = async (query = {}) => {
-    const { skip = 0, limit = 50, planId } = query;
-    const filter = {};
-    if (planId) filter.planId = planId;
+    const { skip = 0, limit = 50, planId, userId } = query;
+    const filter = { planId: { $in: await accessiblePlanIds(userId) } };
+    if (planId) filter.planId.$eq = queryId(planId, 'planId');
     const [items, totalCount] = await Promise.all([
         Location.find(filter).skip(Number(skip)).limit(Number(limit)),
         Location.countDocuments(filter),
@@ -31,5 +33,6 @@ export const update = async (id, data) => {
 export const remove = async (id) => {
     const item = await Location.findByIdAndDelete(id);
     if (!item) throw Object.assign(new Error('Location not found'), { status: 404 });
+    await Route.deleteMany({ originLocationId: id });
     return item;
 };

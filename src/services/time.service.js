@@ -2,6 +2,7 @@ import Time from '../models/time.model.js';
 import Step from '../models/step.model.js';
 import Route from '../models/route.model.js';
 import * as routeService from './route.service.js';
+import { accessiblePlanIds, queryId } from './access.service.js';
 
 const computeDependentDatetime = async (dep, parentDatetime) => {
     if (dep.routeId) {
@@ -13,8 +14,27 @@ const computeDependentDatetime = async (dep, parentDatetime) => {
     return new Date(parentDatetime.getTime() + dep.offsetSeconds * 1000);
 };
 
-export const cascadeTimeUpdate = async (timeId, newDatetime) => {
-    const dependents = await Time.find({ parentTimeId: timeId });
+/**
+ * Whether walking up the `parentTimeId` chain from `startId` (inclusive) reaches `targetId`.
+ * Stops on a time already seen, so an existing loop cannot make it run forever.
+ * @param {*} startId Time id to start from.
+ * @param {*} targetId Time id to look for.
+ * @returns {Promise<boolean>}
+ */
+const reachesTime = async (startId, targetId) => {
+    const seen = new Set();
+    for (let id = startId; id && !seen.has(String(id)); id = (await Time.findById(id).select('parentTimeId').lean())?.parentTimeId) {
+        if (String(id) === String(targetId)) return true;
+        seen.add(String(id));
+    }
+    return false;
+};
+
+const selfDependency = () => Object.assign(new Error('A time cannot depend on itself'), { status: 400 });
+
+export const cascadeTimeUpdate = async (timeId, newDatetime, visited = new Set()) => {
+    visited.add(String(timeId));
+    const dependents = (await Time.find({ parentTimeId: timeId })).filter((dep) => !visited.has(String(dep._id)));
     console.log(':~: cascade', JSON.stringify({ timeId, newDatetime, dependentCount: dependents.length, dependentIds: dependents.map(d => ({ id: d._id, label: d.label, routeId: d.routeId })) }));
     for (const dep of dependents) {
         let computed;
@@ -60,7 +80,7 @@ export const cascadeTimeUpdate = async (timeId, newDatetime) => {
         }
         dep.datetime = computed;
         await dep.save();
-        await cascadeTimeUpdate(dep._id, computed);
+        await cascadeTimeUpdate(dep._id, computed, visited);
     }
 };
 
@@ -78,9 +98,9 @@ export const recalculateForRoute = async (routeId) => {
 };
 
 export const list = async (query = {}) => {
-    const { skip = 0, limit = 50, planId } = query;
-    const filter = {};
-    if (planId) filter.planId = planId;
+    const { skip = 0, limit = 50, planId, userId } = query;
+    const filter = { planId: { $in: await accessiblePlanIds(userId) } };
+    if (planId) filter.planId.$eq = queryId(planId, 'planId');
     const [items, totalCount] = await Promise.all([
         Time.find(filter).sort({ datetime: 1 }).skip(Number(skip)).limit(Number(limit)),
         Time.countDocuments(filter),
@@ -114,6 +134,7 @@ export const create = async (data) => {
 export const update = async (id, data) => {
     console.log(':~: time.update called', JSON.stringify({ id, data: { ...data, datetime: data.datetime || undefined } }));
     if (data.parentTimeId) {
+        if (await reachesTime(data.parentTimeId, id)) throw selfDependency();
         const parent = await Time.findById(data.parentTimeId);
         if (!parent) throw Object.assign(new Error('Parent time not found'), { status: 404 });
         if (data.routeId) {
@@ -190,6 +211,8 @@ export const merge = async (recipientId, sourceId) => {
         survivor = recipient;
         absorbed = source;
     }
+
+    if (await reachesTime(survivor._id, absorbed._id)) throw selfDependency();
 
     await Time.updateMany(
         { parentTimeId: absorbed._id },

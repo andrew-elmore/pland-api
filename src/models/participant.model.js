@@ -11,7 +11,7 @@ const participantSchema = new Schema({
     lastName: { type: String, default: '' },
     email: { type: String, required: true },
     role: { type: String, enum: ROLES, required: true },
-    userId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    userId: { type: String, default: null },
 }, baseSchemaOptions);
 
 export default mongoose.model('Participant', participantSchema);

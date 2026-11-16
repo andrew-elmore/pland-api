@@ -1,4 +1,5 @@
 import * as planService from '../services/plan.service.js';
+import { currentAccount } from '../middleware/auth.js';
 
 export const list = async (req, res, next) => {
     try {
@@ -20,7 +21,7 @@ export const get = async (req, res, next) => {
 
 export const create = async (req, res, next) => {
     try {
-        const result = await planService.create({ ...req.body, ownerId: req.user.id });
+        const result = await planService.create(req.body, await currentAccount(req));
         res.status(201).json(result);
     } catch (err) {
         next(err);

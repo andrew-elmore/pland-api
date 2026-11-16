@@ -2,7 +2,7 @@ import * as groupService from '../services/group.service.js';
 
 export const list = async (req, res, next) => {
     try {
-        const result = await groupService.list(req.query);
+        const result = await groupService.list({ ...req.query, userId: req.user.id });
         res.json(result);
     } catch (err) {
         next(err);

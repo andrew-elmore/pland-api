@@ -2,7 +2,7 @@ import * as windowService from '../services/window.service.js';
 
 export const list = async (req, res, next) => {
     try {
-        const result = await windowService.list(req.query);
+        const result = await windowService.list({ ...req.query, userId: req.user.id });
         res.json(result);
     } catch (err) {
         next(err);

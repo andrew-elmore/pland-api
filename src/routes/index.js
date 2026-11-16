@@ -1,6 +1,4 @@
 import { Router } from 'express';
-import authRoutes from './auth.routes.js';
-import userRoutes from './user.routes.js';
 import profileRoutes from './profile.routes.js';
 import roleRoutes from './role.routes.js';
 import groupRoutes from './group.routes.js';
@@ -16,8 +14,6 @@ import timeslotRoutes from './timeslot.routes.js';
 
 const router = Router();
 
-router.use('/auth', authRoutes);
-router.use('/users', userRoutes);
 router.use('/profiles', profileRoutes);
 router.use('/roles', roleRoutes);
 router.use('/groups', groupRoutes);

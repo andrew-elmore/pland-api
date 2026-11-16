@@ -2,7 +2,7 @@ import * as timeService from '../services/time.service.js';
 
 export const list = async (req, res, next) => {
     try {
-        const result = await timeService.list(req.query);
+        const result = await timeService.list({ ...req.query, userId: req.user.id });
         res.json(result);
     } catch (err) {
         next(err);

@@ -1,10 +1,15 @@
 import Timeslot from '../models/timeslot.model.js';
+import Window from '../models/window.model.js';
+import Itinerary from '../models/itinerary.model.js';
+import { accessiblePlanIds } from './access.service.js';
 
 export const list = async (query = {}) => {
-    const { skip = 0, limit = 50 } = query;
+    const { skip = 0, limit = 50, userId } = query;
+    const itineraryIds = await Itinerary.distinct('_id', { planId: { $in: await accessiblePlanIds(userId) } });
+    const filter = { windowId: { $in: await Window.distinct('_id', { itineraryId: { $in: itineraryIds } }) } };
     const [items, totalCount] = await Promise.all([
-        Timeslot.find().skip(Number(skip)).limit(Number(limit)),
-        Timeslot.countDocuments(),
+        Timeslot.find(filter).skip(Number(skip)).limit(Number(limit)),
+        Timeslot.countDocuments(filter),
     ]);
     return { items, totalCount };
 };

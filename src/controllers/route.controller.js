@@ -20,7 +20,7 @@ export const preview = async (req, res, next) => {
 
 export const list = async (req, res, next) => {
     try {
-        const result = await routeService.list(req.query);
+        const result = await routeService.list({ ...req.query, userId: req.user.id });
         res.json(result);
     } catch (err) {
         next(err);
