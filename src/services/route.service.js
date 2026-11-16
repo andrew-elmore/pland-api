@@ -4,6 +4,7 @@ import Step from '../models/step.model.js';
 import Time from '../models/time.model.js';
 import Itinerary from '../models/itinerary.model.js';
 import * as timeService from './time.service.js';
+import { accessiblePlanIds, queryId } from './access.service.js';
 import env from '../config/env.js';
 
 const populateLocations = (query) => query.populate('originLocationId', 'name').populate('destinationLocationId', 'name');
@@ -190,10 +191,10 @@ export const preview = async (data) => {
 };
 
 export const list = async (query = {}) => {
-    const { skip = 0, limit = 50, planId } = query;
-    let filter = {};
+    const { skip = 0, limit = 50, planId, userId } = query;
+    const filter = { originLocationId: { $in: await Location.distinct('_id', { planId: { $in: await accessiblePlanIds(userId) } }) } };
     if (planId) {
-        const itineraries = await Itinerary.find({ planId }).select('_id');
+        const itineraries = await Itinerary.find({ planId: queryId(planId, 'planId') }).select('_id');
         const steps = await Step.find({
             itineraryId: { $in: itineraries.map(i => i._id) },
             routeId: { $ne: null },

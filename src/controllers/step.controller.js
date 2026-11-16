@@ -2,7 +2,7 @@ import * as stepService from '../services/step.service.js';
 
 export const list = async (req, res, next) => {
     try {
-        const result = await stepService.list(req.query);
+        const result = await stepService.list({ ...req.query, userId: req.user.id });
         res.json(result);
     } catch (err) {
         next(err);

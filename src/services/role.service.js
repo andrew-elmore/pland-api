@@ -1,10 +1,12 @@
 import Role from '../models/role.model.js';
+import { accessiblePlanIds } from './access.service.js';
 
 export const list = async (query = {}) => {
-    const { skip = 0, limit = 50 } = query;
+    const { skip = 0, limit = 50, userId } = query;
+    const filter = { planId: { $in: await accessiblePlanIds(userId) } };
     const [items, totalCount] = await Promise.all([
-        Role.find().skip(Number(skip)).limit(Number(limit)),
-        Role.countDocuments(),
+        Role.find(filter).skip(Number(skip)).limit(Number(limit)),
+        Role.countDocuments(filter),
     ]);
     return { items, totalCount };
 };

@@ -57,9 +57,16 @@ Apply middleware between the path and the handler:
 
 ```javascript
 import { authenticate } from '../middleware/auth.js';
+import { authorize } from '../middleware/authorize.js';
 
 router.get('/', authenticate, controller.list);
+router.get('/:id', authenticate, authorize('Entity'), controller.get);
+router.post('/', authenticate, authorize('Entity'), controller.create);
+router.put('/:id', authenticate, authorize('Entity'), controller.update);
+router.delete('/:id', authenticate, authorize('Entity'), controller.remove);
 ```
+
+Every plan-scoped route except `list` gets `authorize('<Kind>')` after `authenticate`, including custom routes. `list` is scoped in the service instead. When the record id is not `req.params.id`, pass where it comes from: `authorize('Plan', (req) => req.body.planId)`.
 
 ### Barrel file (`index.js`)
 

@@ -1,9 +1,10 @@
 import Group from '../models/group.model.js';
+import { accessiblePlanIds, queryId } from './access.service.js';
 
 export const list = async (query = {}) => {
-    const { skip = 0, limit = 50, planId } = query;
-    const filter = {};
-    if (planId) filter.planId = planId;
+    const { skip = 0, limit = 50, planId, userId } = query;
+    const filter = { planId: { $in: await accessiblePlanIds(userId) } };
+    if (planId) filter.planId.$eq = queryId(planId, 'planId');
     const [items, totalCount] = await Promise.all([
         Group.find(filter).skip(Number(skip)).limit(Number(limit)),
         Group.countDocuments(filter),

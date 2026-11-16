@@ -45,6 +45,7 @@ Every schema passes `baseSchemaOptions` from `../utils/schemaOptions.js` as the 
 | Required ref | `{ type: Schema.Types.ObjectId, ref: 'ModelName', required: true }` |
 | Nullable ref | `{ type: Schema.Types.ObjectId, ref: 'ModelName', default: null }` |
 | Ref array | `[{ type: Schema.Types.ObjectId, ref: 'ModelName' }]` |
+| User ref (Clerk user id) | `{ type: String, required: true }` or `{ type: String, default: null }` |
 | Required number | `{ type: Number, required: true }` |
 | Boolean | `{ type: Boolean, default: false }` |
 | Required date | `{ type: Date, required: true }` |

@@ -95,6 +95,16 @@ Every handler wraps its body in `try/catch` and calls `next(err)` on failure. Ne
 
 Controllers never access models directly. They never contain conditionals, transformations, or validation beyond what Express provides. All logic goes in the service.
 
+### Signed-in user
+
+`list` passes the signed-in user so the service can scope results to plans the user can access:
+
+```javascript
+const result = await entityService.list({ ...req.query, userId: req.user.id });
+```
+
+Single-record handlers need nothing extra: the route's `authorize` middleware has already checked access.
+
 ### Adding custom handlers
 
 Custom handlers follow the same pattern and go after the five standard handlers:

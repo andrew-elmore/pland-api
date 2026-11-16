@@ -2,7 +2,7 @@ import * as roleService from '../services/role.service.js';
 
 export const list = async (req, res, next) => {
     try {
-        const result = await roleService.list(req.query);
+        const result = await roleService.list({ ...req.query, userId: req.user.id });
         res.json(result);
     } catch (err) {
         next(err);

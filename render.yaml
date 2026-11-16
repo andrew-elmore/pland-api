@@ -1,0 +1,57 @@
+services:
+  - type: web
+    name: pland-api
+    runtime: node
+    region: ohio
+    plan: free
+    branch: master
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.21.1
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_MODE
+        value: clerk
+      - key: CORS_ORIGIN
+        value: https://pland-ui.onrender.com
+      - key: MONGODB_URI
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_WEBHOOK_SIGNING_SECRET
+        sync: false
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+  - type: web
+    name: pland-api-test
+    runtime: node
+    region: ohio
+    plan: free
+    branch: develop
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.21.1
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_MODE
+        value: clerk
+      - key: CORS_ORIGIN
+        value: https://pland-ui-test.onrender.com
+      - key: MONGODB_URI
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_WEBHOOK_SIGNING_SECRET
+        sync: false
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false

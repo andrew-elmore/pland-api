@@ -2,7 +2,7 @@ import * as timeslotService from '../services/timeslot.service.js';
 
 export const list = async (req, res, next) => {
     try {
-        const result = await timeslotService.list(req.query);
+        const result = await timeslotService.list({ ...req.query, userId: req.user.id });
         res.json(result);
     } catch (err) {
         next(err);

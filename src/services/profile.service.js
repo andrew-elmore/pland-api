@@ -1,33 +1,37 @@
 import Profile from '../models/profile.model.js';
+import { hasForbiddenKey } from './access.service.js';
 
 export const list = async (query = {}) => {
-    const { skip = 0, limit = 50 } = query;
+    const { skip = 0, limit = 50, userId } = query;
+    const filter = { userId };
     const [items, totalCount] = await Promise.all([
-        Profile.find().skip(Number(skip)).limit(Number(limit)),
-        Profile.countDocuments(),
+        Profile.find(filter).skip(Number(skip)).limit(Number(limit)),
+        Profile.countDocuments(filter),
     ]);
     return { items, totalCount };
 };
 
-export const get = async (id) => {
-    const item = await Profile.findById(id);
+export const get = async (id, userId) => {
+    const item = await Profile.findOne({ _id: id, userId });
     if (!item) throw Object.assign(new Error('Profile not found'), { status: 404 });
     return item;
 };
 
-export const create = async (data) => {
-    const item = new Profile(data);
+export const create = async (data, userId) => {
+    if (hasForbiddenKey(data)) throw Object.assign(new Error('Invalid field name'), { status: 400 });
+    const item = new Profile({ ...data, userId });
     return item.save();
 };
 
-export const update = async (id, data) => {
-    const item = await Profile.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+export const update = async (id, data, userId) => {
+    if (hasForbiddenKey(data)) throw Object.assign(new Error('Invalid field name'), { status: 400 });
+    const item = await Profile.findOneAndUpdate({ _id: id, userId }, { ...data, userId }, { new: true, runValidators: true });
     if (!item) throw Object.assign(new Error('Profile not found'), { status: 404 });
     return item;
 };
 
-export const remove = async (id) => {
-    const item = await Profile.findByIdAndDelete(id);
+export const remove = async (id, userId) => {
+    const item = await Profile.findOneAndDelete({ _id: id, userId });
     if (!item) throw Object.assign(new Error('Profile not found'), { status: 404 });
     return item;
 };

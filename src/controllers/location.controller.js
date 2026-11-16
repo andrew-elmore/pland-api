@@ -2,7 +2,7 @@ import * as locationService from '../services/location.service.js';
 
 export const list = async (req, res, next) => {
     try {
-        const result = await locationService.list(req.query);
+        const result = await locationService.list({ ...req.query, userId: req.user.id });
         res.json(result);
     } catch (err) {
         next(err);
